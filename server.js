@@ -1,57 +1,72 @@
 const express = require('express');
+const fs = require('fs'); // File System module
+const path = require('path'); // Path module
 const app = express();
 const port = 3000;
 
-// This is our in-memory "database"
-let products = [
-    { id: 1, name: 'Sample Product', price: 10.00 }
-];
-let nextProductId = 2;
+const productsFilePath = path.join(__dirname, 'data', 'products.json');
 
-// Set up middleware
-app.set('view engine', 'ejs'); // Use EJS for templates
+// --- Middleware ---
+app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true })); // Parse form data
+app.use(express.static(path.join(__dirname, 'public'))); // Serve static files from 'public' folder
+
+// --- Helper Functions ---
+function getProducts() {
+  const data = fs.readFileSync(productsFilePath, 'utf8');
+  return JSON.parse(data);
+}
+
+function saveProducts(products) {
+  fs.writeFileSync(productsFilePath, JSON.stringify(products, null, 2), 'utf8');
+}
 
 // --- Routes ---
 
 // 1. Shop Page (for customers)
 app.get('/', (req, res) => {
-    // Render the shop page and pass in the list of products
-    res.render('shop', { products: products });
+  const products = getProducts();
+  res.render('shop', { products: products });
 });
 
-// 2. Admin Panel Page
+// 2. Admin Page (to view and manage products)
 app.get('/admin', (req, res) => {
-    // Render the admin page and pass in the list of products
-    res.render('admin', { products: products });
+  const products = getProducts();
+  res.render('admin', { products: products });
 });
 
-// 3. Add Product (This handles the form submission)
-app.post('/add-product', (req, res) => {
-    // Get data from the form
-    const productName = req.body.productName;
-    const productPrice = parseFloat(req.body.productPrice);
-
-    // Create a new product object
-    const newProduct = {
-        id: nextProductId,
-        name: productName,
-        price: productPrice
-    };
-
-    // Add it to our "database"
-    products.push(newProduct);
-    nextProductId++;
-
-    console.log('Product added:', newProduct);
-
-    // Redirect the admin back to the admin page
-    res.redirect('/admin');
+// 3. Handle Add Product Form
+app.post('/admin/add', (req, res) => {
+  const products = getProducts();
+  const newProduct = {
+    id: Date.now(), // Use timestamp as a simple unique ID
+    name: req.body.name,
+    price: parseFloat(req.body.price),
+    image: req.body.image || 'https://via.placeholder.com/300' // Default image
+  };
+  
+  products.push(newProduct);
+  saveProducts(products);
+  
+  res.redirect('/admin'); // Go back to the admin page
 });
 
-// Start the server
+// 4. Handle Delete Product Form
+app.post('/admin/delete', (req, res) => {
+  let products = getProducts();
+  const productId = parseInt(req.body.productId, 10);
+  
+  // Filter out the product to be deleted
+  products = products.filter(p => p.id !== productId);
+  
+  saveProducts(products);
+  
+  res.redirect('/admin'); // Go back to the admin page
+});
+
+// --- Start Server ---
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log(`Shop:     http://localhost:${port}`);
-    console.log(`Admin:    http://localhost:${port}/admin`);
+  console.log(`Server running at http://localhost:${port}`);
+  console.log(`Shop:     http://localhost:${port}`);
+  console.log(`Admin:    http://localhost:${port}/admin`);
 });
